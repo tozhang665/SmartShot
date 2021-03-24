@@ -4,6 +4,24 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
+#include "HX711.h"
+
+#include<Wire.h>
+
+//HX711 DATA
+HX711 scale;
+
+int dataPin = 21;
+int clockPin = 22;
+float reading = 0;
+int base = 0;
+
+
+//GY DATA
+const int MPU_addr=0x68;
+int16_t AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;
+
+
 BLECharacteristic *pCharacteristic;
 bool deviceConnected = false;
 uint8_t value = 0;
@@ -26,29 +44,36 @@ class MyServerCallbacks: public BLEServerCallbacks {
 
 int myPot = 34;
 int currentVal = 0;
-int setupResArray[50];
-int actualResArray[50];
-int setupResAverage = 0;
-int actualResAverage = 0;
+int setupStrainArray[50];
+int actualStrainArray[50];
+int setupStrainAverage = 0;
+int actualStrainAverage = 0;
 
 
 void setup() {
   Serial.begin(115200);
 
-
-
+  //GYRO START
   
-  // put your setup code here, to run once:
-  //grab 50 values that are taken over 5 seconds 
-  for(int i = 0; i < sizeof(setupResArray); i++){
-    setupResArray[i] = analogRead(myPot);
-    delay(100);
+  //Wire.begin();
+  //Wire.beginTransmission(MPU_addr);
+  //Wire.write(0x6B);  // PWR_MGMT_1 register
+  //Wire.write(0);     // set to zero (wakes up the MPU-6050)
+  //Wire.endTransmission(true);
+  
+  //STRAIN GAUGE START
+  scale.begin(dataPin, clockPin);
+
+
+   for(int i = 0; i < sizeof(setupStrainArray); i++){
+    setupStrainAverage = scale.read() / 100000;
+    delay(20);
   }
-  // find the average of the previous values;
-  for(int j : setupResArray){
-    setupResAverage = setupResAverage + j;
-  }
-  setupResAverage = setupResAverage/50;
+  setupStrainAverage = setupStrainAverage / 50;
+  
+
+
+
 
 
 
@@ -92,35 +117,43 @@ void loop() {
 
 
 
-
-
-
-
-  
-  // take 50 readings over 1 second 
-  for(int i = 0; i < sizeof(actualResArray); i++){
-    actualResArray[i] = analogRead(myPot);
+  for(int i = 0; i < sizeof(actualStrainArray); i++){
+    actualStrainAverage = scale.read() / 100000;
     delay(20);
   }
-  for(int j : actualResArray){
-    actualResAverage = actualResAverage + j;
-  }
-  actualResAverage = actualResAverage / 50;
+  actualStrainAverage = actualStrainAverage / 50;
+  
+
+
+
+  //TAKE THE VALUES FROM THE GYRO
+
+  //Wire.beginTransmission(MPU_addr);
+  //Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)
+  //Wire.endTransmission(false);
+  //Wire.requestFrom(MPU_addr,14,true);  // request a total of 14 registers
+  //AcX=Wire.read()<<8|Wire.read();  // 0x3B (ACCEL_XOUT_H) & 0x3C (ACCEL_XOUT_L)    
+  //AcY=Wire.read()<<8|Wire.read();  // 0x3D (ACCEL_YOUT_H) & 0x3E (ACCEL_YOUT_L)
+  //AcZ=Wire.read()<<8|Wire.read();  // 0x3F (ACCEL_ZOUT_H) & 0x40 (ACCEL_ZOUT_L)
+  //Tmp=Wire.read()<<8|Wire.read();  // 0x41 (TEMP_OUT_H) & 0x42 (TEMP_OUT_L)
+  //GyX=Wire.read()<<8|Wire.read();  // 0x43 (GYRO_XOUT_H) & 0x44 (GYRO_XOUT_L)
+  //GyY=Wire.read()<<8|Wire.read();  // 0x45 (GYRO_YOUT_H) & 0x46 (GYRO_YOUT_L)
+  //GyZ=Wire.read()<<8|Wire.read();  // 0x47 (GYRO_ZOUT_H) & 0x48 (GYRO_ZOUT_L)
+  //Serial.println("AcX = "); Serial.print(AcX);
+  //Serial.println("AcY = "); Serial.print(AcY);
+  //Serial.println("AcZ = "); Serial.print(AcZ);
+
+
+
+
+
+
+
 
   // send 100 when reading is good, send 0 if not good. 
-
-
-
-
-
-
   
   if (deviceConnected) {
 
-
-
-
-    
   if(actualResAverage > (.9 * setupResAverage) && actualResAverage < (1.1 * setupResAverage)){
     value = 100;
   }else{

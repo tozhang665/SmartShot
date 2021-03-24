@@ -1,12 +1,8 @@
-/*********
-  Rui Santos
-  Complete project details at http://randomnerdtutorials.com  
-*********/
 
 #include "BLEDevice.h"
 #include <Wire.h>
+#include "HX711.h"
 
-//Default Temperature is in Celsius
 //BLE Server name (the other ESP32 name running the server sketch)
 #define bleServerName "POTmeter"
 
@@ -23,23 +19,11 @@ static BLEAddress *pServerAddress;
 //Characteristic that we want to read and characteristic that we want to write.
 static BLERemoteCharacteristic* potCharacteristic;
 
-const uint8_t notificationOn[] = {0x1, 0x0};
-const uint8_t notificationOff[] = {0x0, 0x0};
-
 char* potR;
-
 boolean newPotR = false;
 
-
-int myPot = 34;
-int currentVal = 0;
-int setupResArray[50];
-int actualResArray[50];
-int setupResAverage = 0;
-int actualResAverage = 0;
-
-
-
+const uint8_t notificationOn[] = {0x1, 0x0};
+const uint8_t notificationOff[] = {0x0, 0x0};
 
 //Connect to the BLE Server that has the name, Service, and Characteristics
 bool connectToServer(BLEAddress pAddress) {
@@ -71,6 +55,7 @@ bool connectToServer(BLEAddress pAddress) {
   return true;
 }
 
+//helper function
 //Callback function that gets called, when another device's advertisement has been received
 class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
   void onResult(BLEAdvertisedDevice advertisedDevice) {
@@ -84,7 +69,7 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 };
 
  
-//When the BLE Server sends a new temperature reading with the notify property
+//When the BLE Server sends a new resistance reading with the notify property
 static void potNotifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, 
                                         uint8_t* pData, size_t length, bool isNotify) {
   //store temperature value
@@ -92,23 +77,82 @@ static void potNotifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
   newPotR = true;
 }
 
-//function that prints the latest sensor readings in the OLED display
 
-void setup() {
+
+
+
+//Initilize all necessary values. 
+
+int currentVal = 0;
+int actualResArray[50];
+int actualResAverage = 0;
+int buzzer = 19;
+
+int dataPin = 21;
+int clockPin = 22;
+HX711 scale;
+
+
+int setupPhase(){
+
+  
+  scale.begin(dataPin, clockPin);
+
+  int setupResArray[50];
+  int setupResAverage = 0;
+  for(int i = 0; i < sizeof(setupResArray); i++){
+    setupResArray[i] = scale.read();
+
+    //for .5s, buzz quickly
+    indicationBuzz(2);
+    delay(50);
+  }
 
 
   
-  //grab 50 values that are taken over 5 seconds 
-  for(int i = 0; i < sizeof(setupResArray); i++){
-    setupResArray[i] = analogRead(myPot);
-    delay(100);
-  }
   // find the average of the previous values;
   for(int j : setupResArray){
     setupResAverage = setupResAverage + j;
   }
   setupResAverage = setupResAverage/50;
 
+    digitalWrite(buzzer,HIGH);
+    delay(1000);
+    digitalWrite(buzzer,LOW);
+
+  return setupResAverage;
+}
+
+void indicationBuzz(int increments){
+   for(int i = 0 ; i < 100 ; i++)
+   {
+    digitalWrite(buzzer,HIGH);
+    delay(increments);//wait for 1ms
+    digitalWrite(buzzer,LOW);
+    delay(increments);//wait for 1ms
+    }
+
+}
+
+void setup() {
+  //delay 1 second for startup to take effect. 
+  
+  scale.begin(dataPin, clockPin);
+
+
+  //alternate buzz for 2s
+  for(int i = 0 ; i < 100 ; i++)
+   {
+    digitalWrite(buzzer,HIGH);
+    delay(10);//wait for 1ms
+    digitalWrite(buzzer,LOW);
+    delay(10);//wait for 1ms
+    }
+
+
+  int setupResAverage = setupPhase();
+  
+  //ADD BUZZER HERE IF NECESSARY
 
 
 
@@ -133,7 +177,7 @@ void setup() {
 void loop() {
     // take 50 readings over 1 second 
   for(int i = 0; i < sizeof(actualResArray); i++){
-    actualResArray[i] = analogRead(myPot);
+    actualResArray[i] = scale.read();
     delay(20);
   }
   for(int j : actualResArray){
@@ -149,6 +193,8 @@ void loop() {
   // If the flag "doConnect" is true then we have scanned for and found the desired
   // BLE Server with which we wish to connect.  Now we connect to it.  Once we are
   // connected we set the connected flag to be true.
+
+  
   if (doConnect == true) {
     if (connectToServer(*pServerAddress)) {
       Serial.println("We are now connected to the BLE Server.");
@@ -160,7 +206,8 @@ void loop() {
     }
     doConnect = false;
   }
-  //if new temperature readings are available, print in the OLED
+
+  
   if (newPotR){
     newPotR = false;
     Serial.print("CLIENT RECEIVED THE FOLLOWING: ");
@@ -175,6 +222,5 @@ void loop() {
     //BOTH GOOD
   }
 
-  
   delay(1000); // Delay a second between loops.
 }
